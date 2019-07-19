@@ -32,7 +32,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		if err := tarrer(fflag, flag.Args()); err != nil {
+		if err := tartar(fflag, flag.Args()); err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
@@ -43,7 +43,7 @@ func main() {
 			xpath = flag.Arg(0)
 		}
 
-		if err := untarrer(fflag, xpath); err != nil {
+		if err := untartar(fflag, xpath); err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
@@ -54,7 +54,7 @@ func main() {
 }
 
 // tarrer walks paths to create tar file tarName
-func tarrer(tarName string, paths []string) (err error) {
+func tartar(tarName string, paths []string) (err error) {
 	tarFile, err := os.Create(tarName)
 	if err != nil {
 		return err
@@ -95,18 +95,9 @@ func tarrer(tarName string, paths []string) (err error) {
 			continue
 		}
 
-		// build tar
-		err = filepath.Walk(path, func(file string, finfo os.FileInfo, err error) error {
+		walker := func(file string, finfo os.FileInfo, err error) error {
 			if err != nil {
 				return err
-			}
-
-			relFilePath := file
-			if filepath.IsAbs(path) {
-				relFilePath, err = filepath.Rel("/", file)
-				if err != nil {
-					return err
-				}
 			}
 
 			// fill in header info using func FileInfoHeader
@@ -114,8 +105,17 @@ func tarrer(tarName string, paths []string) (err error) {
 			if err != nil {
 				return err
 			}
+
+			relFilePath := file
+			if filepath.IsAbs(path) {
+				relFilePath, err = filepath.Rel(path, file)
+				if err != nil {
+					return err
+				}
+			}
 			// ensure header has relative file path
 			hdr.Name = relFilePath
+
 			if err := tw.WriteHeader(hdr); err != nil {
 				return err
 			}
@@ -135,16 +135,18 @@ func tarrer(tarName string, paths []string) (err error) {
 				return err
 			}
 			return nil
-		})
-		if err != nil {
-			fmt.Printf("failed to create tar %s from %s: %s\n", tarName, path, err)
+		}
+
+		// build tar
+		if err := filepath.Walk(path, walker); err != nil {
+			fmt.Printf("failed to add %s to tar: %s\n", path, err)
 		}
 	}
 	return nil
 }
 
 // untarrer extract contant of file tarName into location xpath
-func untarrer(tarName, xpath string) (err error) {
+func untartar(tarName, xpath string) (err error) {
 	tarFile, err := os.Open(tarName)
 	if err != nil {
 		return err
